@@ -1,0 +1,27 @@
+stages:
+  - verify
+  - security
+
+default:
+  image: node:20-alpine
+  cache:
+    key: releasepilot-npm
+    paths:
+      - .npm/
+
+install:
+  stage: verify
+  script:
+    - npm install --cache .npm --prefer-offline
+    - npm run test
+    - npm run build
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - dist/
+
+# Enable the GitLab SAST and secret-detection templates in project CI/CD settings
+# or include the templates supported by your GitLab tier/version.
+# Duo Agent Platform Code Review Flow is configured and triggered separately
+# from GitLab's AI > Flows UI; see docs/GITLAB_SETUP.md.
