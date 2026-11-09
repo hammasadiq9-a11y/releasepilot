@@ -25,6 +25,7 @@ export default function App() {
   const [project, setProject] = useState('acme / storefront');
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<'all' | Finding['severity']>('all');
 
   const counts = useMemo(() => ({
     critical: analysis.findings.filter(f => f.severity === 'critical').length,
@@ -68,7 +69,44 @@ export default function App() {
     event.target.value = '';
   }
 
-  const displayedFindings = showAll ? analysis.findings : analysis.findings.slice(0, 3);
+  const filteredFindings = severityFilter === 'all' ? analysis.findings : analysis.findings.filter(finding => finding.severity === severityFilter);
+  const displayedFindings = showAll ? filteredFindings : filteredFindings.slice(0, 3);
+
+  function exportReport() {
+    const report = [
+      '# ReleasePilot review report',
+      '',
+      `- Project: ${project}`,
+      `- Generated: ${new Date(analysis.checkedAt).toLocaleString()}`,
+      `- Readiness score: ${analysis.score}/100`,
+      `- Status: ${analysis.label}`,
+      '',
+      '## Summary',
+      analysis.summary,
+      '',
+      '## Findings',
+      ...(analysis.findings.length ? analysis.findings.map((finding, index) => [
+        `### ${index + 1}. ${finding.title} (${finding.severity.toUpperCase()})`,
+        `- Category: ${finding.category}`,
+        `- Changed-file line: ${finding.line ?? 'Not available'}`,
+        finding.detail,
+        ''
+      ].join('\\n')) : ['No heuristic rule matches were found. This is not proof that the change is safe.']),
+      '',
+      '> This report contains local heuristic signals only. It is not a complete security scan or an approval to merge. Human review and CI verification are still required.'
+    ].join('\\n');
+    const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `releasepilot-${project.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase()}-report.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setToast('Review report exported.');
+    window.setTimeout(() => setToast(''), 3000);
+  }
 
   return (
     <div className="app-shell">
@@ -149,11 +187,11 @@ export default function App() {
           </div>}
 
           {activeTab === 'review' && <section className="panel review-view">
-            <div className="panel-heading"><div><h3>Change review</h3><p>Inspect potential risks before merging</p></div><button className="outline-button" onClick={() => setShowEditor(!showEditor)}><Code2 size={14} /> {showEditor ? 'Hide input' : 'Edit diff'}</button></div>
+            <div className="panel-heading"><div><h3>Change review</h3><p>Inspect potential risks before merging</p></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="outline-button" onClick={exportReport}><FileCode2 size={14} /> Export report</button><button className="outline-button" onClick={() => setShowEditor(!showEditor)}><Code2 size={14} /> {showEditor ? 'Hide input' : 'Edit diff'}</button></div></div>
             {showEditor && <div className="diff-editor"><div className="editor-toolbar"><span><Terminal size={13} /> Paste a unified diff or source snippet</span><label className="upload-label"><UploadCloud size={13} /> Upload text file<input type="file" accept=".diff,.patch,.txt,.js,.ts,.tsx,.jsx,.py,.go,.java,.json" onChange={handleFile} /></label></div><textarea value={diff} onChange={e => setDiff(e.target.value)} spellCheck={false} aria-label="Code diff input" placeholder="Paste your code diff here..." /><div className="editor-footer"><span>{diff.split(/\\r?\\n/).length} lines · local analysis</span><div><button className="ghost-button" onClick={loadSample}>Load sample</button><button className="primary-button compact" onClick={runReview}><Play size={13} /> Run review</button></div></div></div>}
             <div className="review-summary"><div className={`review-score ${analysis.score < 82 ? 'warn' : ''}`}><Gauge size={18} /><strong>{analysis.score}/100</strong><span>{analysis.label}</span></div><p>{analysis.summary}</p></div>
-            <div className="findings-header"><div><h4>Findings <span>{analysis.findings.length}</span></h4><p>Rule-based signals · human review required</p></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : 'Show all'} <ChevronDown size={13} /></button></div>
-            {analysis.findings.length === 0 ? <div className="empty-state"><CheckCircle2 size={24} /><strong>No rule matches found</strong><p>This does not guarantee the change is safe. Run your test and security pipeline, then request human review.</p></div> : <div className="finding-list">{displayedFindings.map(finding => <div className="finding-item" key={finding.id}><div className={`finding-icon ${finding.severity}`}><AlertTriangle size={16} /></div><div className="finding-content"><div className="finding-title-row"><strong>{finding.title}</strong><span className={severityClass(finding.severity)}>{finding.severity}</span></div><p>{finding.detail}</p><div className="finding-meta"><span>{finding.category}</span><span>·</span><span>Line {finding.line}</span><span>·</span><span>Heuristic signal</span></div></div></div>)}</div>}
+            <div className="findings-header"><div><h4>Findings <span>{filteredFindings.length}{severityFilter !== 'all' ? ` / ${analysis.findings.length}` : ''}</span></h4><p>Rule-based signals · human review required</p></div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><label style={{ fontSize: 12, color: 'var(--muted, #777)' }} htmlFor="severity-filter">Severity</label><select id="severity-filter" aria-label="Filter findings by severity" value={severityFilter} onChange={event => setSeverityFilter(event.target.value as typeof severityFilter)} style={{ padding: '7px 9px', borderRadius: 8, border: '1px solid var(--border, #ddd)', background: 'var(--surface, white)', color: 'inherit' }}><option value="all">All</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : 'Show all'} <ChevronDown size={13} /></button></div></div>
+            {analysis.findings.length === 0 ? <div className="empty-state"><CheckCircle2 size={24} /><strong>No rule matches found</strong><p>This does not guarantee the change is safe. Run your test and security pipeline, then request human review.</p></div> : filteredFindings.length === 0 ? <div className="empty-state"><strong>No {severityFilter} findings</strong><p>Try another severity filter to inspect the remaining findings.</p></div> : <div className="finding-list">{displayedFindings.map(finding => <div className="finding-item" key={finding.id}><div className={`finding-icon ${finding.severity}`}><AlertTriangle size={16} /></div><div className="finding-content"><div className="finding-title-row"><strong>{finding.title}</strong><span className={severityClass(finding.severity)}>{finding.severity}</span></div><p>{finding.detail}</p><div className="finding-meta"><span>{finding.category}</span><span>·</span><span>Line {finding.line}</span><span>·</span><span>Heuristic signal</span></div></div></div>)}</div>}
             <div className="human-note"><LockKeyhole size={15} /><p><strong>Human decision required.</strong> This prototype uses local pattern checks, not an LLM or full security scanner. Validate findings and test results before merging.</p></div>
           </section>}
 
