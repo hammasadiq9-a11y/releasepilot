@@ -91,10 +91,10 @@ export default function App() {
         `- Changed-file line: ${finding.line ?? 'Not available'}`,
         finding.detail,
         ''
-      ].join('\\n')) : ['No heuristic rule matches were found. This is not proof that the change is safe.']),
+      ].join('\n')) : ['No heuristic rule matches were found. This is not proof that the change is safe.']),
       '',
       '> This report contains local heuristic signals only. It is not a complete security scan or an approval to merge. Human review and CI verification are still required.'
-    ].join('\\n');
+    ].join('\n');
     const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
