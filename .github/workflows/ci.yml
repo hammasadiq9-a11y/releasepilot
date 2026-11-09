@@ -26,6 +26,12 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Audit dependency vulnerabilities
+        shell: bash
+        run: |
+          npm audit --json > npm-audit.json || true
+          node -e "const a=require('./npm-audit.json'); console.log('Full dependency audit:'); for (const [name,v] of Object.entries(a.vulnerabilities || {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
+          npm audit --omit=dev || true
       - name: Run unit tests
         run: npm test
       - name: Build production bundle
