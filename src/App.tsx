@@ -23,6 +23,8 @@ export default function App() {
   const [showAll, setShowAll] = useState(false);
   const [toast, setToast] = useState('');
   const [project, setProject] = useState('acme / storefront');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const counts = useMemo(() => ({
     critical: analysis.findings.filter(f => f.severity === 'critical').length,
@@ -76,21 +78,22 @@ export default function App() {
           <span>release<span className="brand-light">pilot</span></span>
           <span className="beta">BETA</span>
         </div>
-        <button className="workspace-switch">
+        <button className="workspace-switch" onClick={() => { setToast('Workspace switching is not connected in this prototype.'); window.setTimeout(() => setToast(''), 3000); }}>
           <div className="workspace-avatar">A</div>
           <div className="workspace-copy"><strong>Acme workspace</strong><small>Free workspace</small></div>
           <ChevronDown size={15} />
         </button>
         <div className="side-label">WORKSPACE</div>
         <nav className="side-nav">
-          <button className="nav-item active"><Layers3 size={17} /> Overview</button>
+          <button className={activeTab === 'overview' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveTab('overview')}><Layers3 size={17} /> Overview</button>
           <button className="nav-item" onClick={() => setActiveTab('review')}><GitPullRequest size={17} /> Change reviews <span className="nav-count">{analysis.findings.length}</span></button>
           <button className="nav-item" onClick={() => setActiveTab('checks')}><ShieldCheck size={17} /> Checks & policies</button>
         </nav>
         <div className="side-label projects-label">PROJECTS <button aria-label="Add project" onClick={() => { setToast('Connect a GitLab project in the integration setup guide.'); window.setTimeout(() => setToast(''), 3500); }}><Plus size={14} /></button></div>
-        <button className="project-link selected" onClick={() => setProject('acme / storefront')}><span className="project-dot purple" /><span>storefront</span><span className="project-branch">main</span></button>
-        <button className="project-link" onClick={() => setProject('acme / payments')}><span className="project-dot blue" /><span>payments-api</span></button>
-        <button className="project-link" onClick={() => setProject('acme / mobile')}><span className="project-dot green" /><span>mobile-app</span></button>
+        {(!searchQuery || 'storefront'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / storefront' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / storefront')}><span className="project-dot purple" /><span>storefront</span><span className="project-branch">main</span></button>}
+        {(!searchQuery || 'payments-api'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / payments' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / payments')}><span className="project-dot blue" /><span>payments-api</span></button>}
+        {(!searchQuery || 'mobile-app'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / mobile' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / mobile')}><span className="project-dot green" /><span>mobile-app</span></button>}
+        {searchQuery && !['storefront','payments-api','mobile-app'].some(name => name.includes(searchQuery.toLowerCase())) && <div className="side-label">No matching projects</div>}
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>New to ReleasePilot?</strong><p>Understand your release risk before you merge.</p><button onClick={() => setToast('Tip: paste a unified diff and run a review to get started.')}>Quick start <ArrowRight size={13} /></button></div>
           <div className="user-profile"><div className="user-avatar">ES</div><div><strong>Engineering team</strong><small>Developer</small></div><ChevronDown size={15} /></div>
@@ -100,7 +103,7 @@ export default function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{project}</strong><span className="branch-pill"><GitBranch size={12} /> main</span></div>
-          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={17} /></button><div className="top-divider" /><button className="help-button"><CircleHelp size={15} /> Help</button><div className="top-avatar">ES</div></div>
+          <div className="top-actions">{showSearch && <input autoFocus aria-label="Search projects" placeholder="Search projects..." value={searchQuery} onChange={event => setSearchQuery(event.target.value)} style={{ width: 160, padding: '8px 10px', border: '1px solid var(--border, #ddd)', borderRadius: 8, background: 'var(--surface, white)', color: 'inherit' }} />}<button className="icon-button" aria-label="Search projects" onClick={() => { setShowSearch(value => !value); setSearchQuery(''); }}><Search size={17} /></button><div className="top-divider" /><button className="help-button" onClick={() => { setToast('Quick start: choose a project, open New review, paste a unified diff, then select Run review.'); window.setTimeout(() => setToast(''), 5000); }}><CircleHelp size={15} /> Help</button><div className="top-avatar">ES</div></div>
         </header>
 
         <div className="content">
@@ -115,7 +118,7 @@ export default function App() {
             <div className="banner-illustration"><div className="orbit orbit-a" /><div className="orbit orbit-b" /><div className="orbit-core"><ShieldCheck size={38} /></div><div className="float-chip chip-top"><CheckCircle2 size={13} /> Tests checked</div><div className="float-chip chip-bottom"><Activity size={13} /> Risk mapped</div></div>
           </section>
 
-          <div className="section-heading"><div><h2>Release overview</h2><p>Snapshot of the selected project</p></div><button className="date-filter"><Clock3 size={14} /> Last 7 days <ChevronDown size={14} /></button></div>
+          <div className="section-heading"><div><h2>Release overview</h2><p>Snapshot of the selected project</p></div><button className="date-filter" onClick={() => { setToast('Date filters are display-only until live project history is connected.'); window.setTimeout(() => setToast(''), 3500); }}><Clock3 size={14} /> Last 7 days <ChevronDown size={14} /></button></div>
           <div className="metrics-grid">
             <Metric icon={<GitPullRequest size={17} />} label="Changes reviewed" value="24" delta="+18.2%" trend="up" note="vs. previous week" />
             <Metric icon={<ShieldCheck size={17} />} label="Release readiness" value={`${analysis.score}%`} delta={analysis.score >= 82 ? 'Healthy' : 'Needs review'} trend={analysis.score >= 82 ? 'up' : 'down'} note="Current sample analysis" />
