@@ -9,7 +9,7 @@ export type Finding = {
 
 export type Analysis = {
   score: number;
-  label: 'Needs attention' | 'Review recommended' | 'Looks ready';
+  label: 'Needs attention' | 'Review recommended' | 'Ready for human review';
   findings: Finding[];
   summary: string;
   checkedAt: string;
@@ -77,33 +77,58 @@ export function analyzeDiff(input: string): Analysis {
   const findings: Finding[] = [];
   const seen = new Set<string>();
   const lines = input.split(/\r?\n/);
+  const isUnifiedDiff = lines.some(line => line.startsWith('diff --git ') || /^@@ -\d/.test(line));
+  let newFileLine = 1;
 
   lines.forEach((line, index) => {
-    const changedLine = line.startsWith('+') && !line.startsWith('+++') ? line.slice(1) : line;
-    const isDiff = line.startsWith('+') && !line.startsWith('+++');
-    // Also analyze pasted source snippets when the input is not a unified diff.
-    const candidate = input.includes('diff --git') ? (isDiff ? changedLine : '') : line;
-    if (!candidate) return;
-    rules.forEach((rule) => {
-      if (rule.pattern.test(candidate)) {
-        const key = `${rule.id}:${index}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        findings.push({
-          id: key,
-          title: rule.title,
-          detail: rule.detail,
-          severity: rule.severity,
-          category: rule.category,
-          line: index + 1
-        });
+    let candidate = '';
+    let reportedLine = index + 1;
+
+    if (isUnifiedDiff) {
+      const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (hunk) {
+        newFileLine = Number(hunk[1]);
+        return;
       }
+
+      if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git ') || line.startsWith('index ')) return;
+
+      if (line.startsWith('+')) {
+        candidate = line.slice(1);
+        reportedLine = newFileLine;
+        newFileLine += 1;
+      } else if (line.startsWith(' ')) {
+        newFileLine += 1;
+      } else {
+        // Removed lines and diff metadata do not exist in the new file.
+        return;
+      }
+    } else {
+      // For pasted source snippets, the displayed line is the source line.
+      candidate = line;
+    }
+
+    if (!candidate.trim()) return;
+
+    rules.forEach((rule) => {
+      if (!rule.pattern.test(candidate)) return;
+      const key = `${rule.id}:${reportedLine}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      findings.push({
+        id: key,
+        title: rule.title,
+        detail: rule.detail,
+        severity: rule.severity,
+        category: rule.category,
+        line: reportedLine
+      });
     });
   });
 
   const weight: Record<Finding['severity'], number> = { critical: 34, high: 22, medium: 12, low: 4 };
   const score = Math.max(0, 100 - findings.reduce((sum, item) => sum + weight[item.severity], 0));
-  const label = score < 55 ? 'Needs attention' : score < 82 ? 'Review recommended' : 'Looks ready';
+  const label = score < 55 ? 'Needs attention' : score < 82 ? 'Review recommended' : 'Ready for human review';
   const summary = findings.length === 0
     ? 'No matches were found by the current heuristic checks. This is not proof that the change is safe; review tests and the full diff before merging.'
     : `${findings.length} potential issue${findings.length === 1 ? '' : 's'} detected. Review each finding in context; these checks can produce false positives and miss issues.`;

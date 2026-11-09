@@ -9,9 +9,10 @@ ReleasePilot is a prototype that helps developers inspect code changes before me
 - Responsive release-readiness dashboard.
 - Paste a unified diff or source snippet, or upload a small text file.
 - Local heuristic checks for hard-coded secrets, debug output, unsafe HTML rendering, disabled TLS verification, TODO/FIXME markers, and empty catch blocks.
-- Severity-ranked findings with evidence lines and actionable explanations.
+- Severity-ranked findings with changed-file line numbers and actionable explanations.
+- Filter findings by severity and export a Markdown review report.
 - A human-in-the-loop review flow: it never approves, merges, or deploys.
-- Unit tests and a GitLab CI pipeline for test/build verification.
+- Unit tests, GitHub Actions checks, and a GitLab CI pipeline for test/build verification.
 
 > **Important:** the current review engine is rule-based and runs locally in the browser. It is not an LLM, a complete security scanner, or proof that code is safe. Findings can be false positives or missed issues. The GitLab Duo Agent Platform integration is a documented next step, not yet active in this prototype.
 

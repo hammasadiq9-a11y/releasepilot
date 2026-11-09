@@ -23,6 +23,9 @@ export default function App() {
   const [showAll, setShowAll] = useState(false);
   const [toast, setToast] = useState('');
   const [project, setProject] = useState('acme / storefront');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<'all' | Finding['severity']>('all');
 
   const counts = useMemo(() => ({
     critical: analysis.findings.filter(f => f.severity === 'critical').length,
@@ -66,7 +69,44 @@ export default function App() {
     event.target.value = '';
   }
 
-  const displayedFindings = showAll ? analysis.findings : analysis.findings.slice(0, 3);
+  const filteredFindings = severityFilter === 'all' ? analysis.findings : analysis.findings.filter(finding => finding.severity === severityFilter);
+  const displayedFindings = showAll ? filteredFindings : filteredFindings.slice(0, 3);
+
+  function exportReport() {
+    const report = [
+      '# ReleasePilot review report',
+      '',
+      `- Project: ${project}`,
+      `- Generated: ${new Date(analysis.checkedAt).toLocaleString()}`,
+      `- Readiness score: ${analysis.score}/100`,
+      `- Status: ${analysis.label}`,
+      '',
+      '## Summary',
+      analysis.summary,
+      '',
+      '## Findings',
+      ...(analysis.findings.length ? analysis.findings.map((finding, index) => [
+        `### ${index + 1}. ${finding.title} (${finding.severity.toUpperCase()})`,
+        `- Category: ${finding.category}`,
+        `- Changed-file line: ${finding.line ?? 'Not available'}`,
+        finding.detail,
+        ''
+      ].join('\n')) : ['No heuristic rule matches were found. This is not proof that the change is safe.']),
+      '',
+      '> This report contains local heuristic signals only. It is not a complete security scan or an approval to merge. Human review and CI verification are still required.'
+    ].join('\n');
+    const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `releasepilot-${project.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase()}-report.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setToast('Review report exported.');
+    window.setTimeout(() => setToast(''), 3000);
+  }
 
   return (
     <div className="app-shell">
@@ -76,21 +116,22 @@ export default function App() {
           <span>release<span className="brand-light">pilot</span></span>
           <span className="beta">BETA</span>
         </div>
-        <button className="workspace-switch">
+        <button className="workspace-switch" onClick={() => { setToast('Workspace switching is not connected in this prototype.'); window.setTimeout(() => setToast(''), 3000); }}>
           <div className="workspace-avatar">A</div>
           <div className="workspace-copy"><strong>Acme workspace</strong><small>Free workspace</small></div>
           <ChevronDown size={15} />
         </button>
         <div className="side-label">WORKSPACE</div>
         <nav className="side-nav">
-          <button className="nav-item active"><Layers3 size={17} /> Overview</button>
+          <button className={activeTab === 'overview' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveTab('overview')}><Layers3 size={17} /> Overview</button>
           <button className="nav-item" onClick={() => setActiveTab('review')}><GitPullRequest size={17} /> Change reviews <span className="nav-count">{analysis.findings.length}</span></button>
           <button className="nav-item" onClick={() => setActiveTab('checks')}><ShieldCheck size={17} /> Checks & policies</button>
         </nav>
         <div className="side-label projects-label">PROJECTS <button aria-label="Add project" onClick={() => { setToast('Connect a GitLab project in the integration setup guide.'); window.setTimeout(() => setToast(''), 3500); }}><Plus size={14} /></button></div>
-        <button className="project-link selected" onClick={() => setProject('acme / storefront')}><span className="project-dot purple" /><span>storefront</span><span className="project-branch">main</span></button>
-        <button className="project-link" onClick={() => setProject('acme / payments')}><span className="project-dot blue" /><span>payments-api</span></button>
-        <button className="project-link" onClick={() => setProject('acme / mobile')}><span className="project-dot green" /><span>mobile-app</span></button>
+        {(!searchQuery || 'storefront'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / storefront' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / storefront')}><span className="project-dot purple" /><span>storefront</span><span className="project-branch">main</span></button>}
+        {(!searchQuery || 'payments-api'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / payments' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / payments')}><span className="project-dot blue" /><span>payments-api</span></button>}
+        {(!searchQuery || 'mobile-app'.includes(searchQuery.toLowerCase())) && <button className={project === 'acme / mobile' ? 'project-link selected' : 'project-link'} onClick={() => setProject('acme / mobile')}><span className="project-dot green" /><span>mobile-app</span></button>}
+        {searchQuery && !['storefront','payments-api','mobile-app'].some(name => name.includes(searchQuery.toLowerCase())) && <div className="side-label">No matching projects</div>}
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>New to ReleasePilot?</strong><p>Understand your release risk before you merge.</p><button onClick={() => setToast('Tip: paste a unified diff and run a review to get started.')}>Quick start <ArrowRight size={13} /></button></div>
           <div className="user-profile"><div className="user-avatar">ES</div><div><strong>Engineering team</strong><small>Developer</small></div><ChevronDown size={15} /></div>
@@ -100,7 +141,7 @@ export default function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{project}</strong><span className="branch-pill"><GitBranch size={12} /> main</span></div>
-          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={17} /></button><div className="top-divider" /><button className="help-button"><CircleHelp size={15} /> Help</button><div className="top-avatar">ES</div></div>
+          <div className="top-actions">{showSearch && <input autoFocus aria-label="Search projects" placeholder="Search projects..." value={searchQuery} onChange={event => setSearchQuery(event.target.value)} style={{ width: 160, padding: '8px 10px', border: '1px solid var(--border, #ddd)', borderRadius: 8, background: 'var(--surface, white)', color: 'inherit' }} />}<button className="icon-button" aria-label="Search projects" onClick={() => { setShowSearch(value => !value); setSearchQuery(''); }}><Search size={17} /></button><div className="top-divider" /><button className="help-button" onClick={() => { setToast('Quick start: choose a project, open New review, paste a unified diff, then select Run review.'); window.setTimeout(() => setToast(''), 5000); }}><CircleHelp size={15} /> Help</button><div className="top-avatar">ES</div></div>
         </header>
 
         <div className="content">
@@ -115,7 +156,7 @@ export default function App() {
             <div className="banner-illustration"><div className="orbit orbit-a" /><div className="orbit orbit-b" /><div className="orbit-core"><ShieldCheck size={38} /></div><div className="float-chip chip-top"><CheckCircle2 size={13} /> Tests checked</div><div className="float-chip chip-bottom"><Activity size={13} /> Risk mapped</div></div>
           </section>
 
-          <div className="section-heading"><div><h2>Release overview</h2><p>Snapshot of the selected project</p></div><button className="date-filter"><Clock3 size={14} /> Last 7 days <ChevronDown size={14} /></button></div>
+          <div className="section-heading"><div><h2>Release overview</h2><p>Snapshot of the selected project</p></div><button className="date-filter" onClick={() => { setToast('Date filters are display-only until live project history is connected.'); window.setTimeout(() => setToast(''), 3500); }}><Clock3 size={14} /> Last 7 days <ChevronDown size={14} /></button></div>
           <div className="metrics-grid">
             <Metric icon={<GitPullRequest size={17} />} label="Changes reviewed" value="24" delta="+18.2%" trend="up" note="vs. previous week" />
             <Metric icon={<ShieldCheck size={17} />} label="Release readiness" value={`${analysis.score}%`} delta={analysis.score >= 82 ? 'Healthy' : 'Needs review'} trend={analysis.score >= 82 ? 'up' : 'down'} note="Current sample analysis" />
@@ -146,11 +187,11 @@ export default function App() {
           </div>}
 
           {activeTab === 'review' && <section className="panel review-view">
-            <div className="panel-heading"><div><h3>Change review</h3><p>Inspect potential risks before merging</p></div><button className="outline-button" onClick={() => setShowEditor(!showEditor)}><Code2 size={14} /> {showEditor ? 'Hide input' : 'Edit diff'}</button></div>
+            <div className="panel-heading"><div><h3>Change review</h3><p>Inspect potential risks before merging</p></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="outline-button" onClick={exportReport}><FileCode2 size={14} /> Export report</button><button className="outline-button" onClick={() => setShowEditor(!showEditor)}><Code2 size={14} /> {showEditor ? 'Hide input' : 'Edit diff'}</button></div></div>
             {showEditor && <div className="diff-editor"><div className="editor-toolbar"><span><Terminal size={13} /> Paste a unified diff or source snippet</span><label className="upload-label"><UploadCloud size={13} /> Upload text file<input type="file" accept=".diff,.patch,.txt,.js,.ts,.tsx,.jsx,.py,.go,.java,.json" onChange={handleFile} /></label></div><textarea value={diff} onChange={e => setDiff(e.target.value)} spellCheck={false} aria-label="Code diff input" placeholder="Paste your code diff here..." /><div className="editor-footer"><span>{diff.split(/\\r?\\n/).length} lines · local analysis</span><div><button className="ghost-button" onClick={loadSample}>Load sample</button><button className="primary-button compact" onClick={runReview}><Play size={13} /> Run review</button></div></div></div>}
             <div className="review-summary"><div className={`review-score ${analysis.score < 82 ? 'warn' : ''}`}><Gauge size={18} /><strong>{analysis.score}/100</strong><span>{analysis.label}</span></div><p>{analysis.summary}</p></div>
-            <div className="findings-header"><div><h4>Findings <span>{analysis.findings.length}</span></h4><p>Rule-based signals · human review required</p></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : 'Show all'} <ChevronDown size={13} /></button></div>
-            {analysis.findings.length === 0 ? <div className="empty-state"><CheckCircle2 size={24} /><strong>No rule matches found</strong><p>This does not guarantee the change is safe. Run your test and security pipeline, then request human review.</p></div> : <div className="finding-list">{displayedFindings.map(finding => <div className="finding-item" key={finding.id}><div className={`finding-icon ${finding.severity}`}><AlertTriangle size={16} /></div><div className="finding-content"><div className="finding-title-row"><strong>{finding.title}</strong><span className={severityClass(finding.severity)}>{finding.severity}</span></div><p>{finding.detail}</p><div className="finding-meta"><span>{finding.category}</span><span>·</span><span>Line {finding.line}</span><span>·</span><span>Heuristic signal</span></div></div></div>)}</div>}
+            <div className="findings-header"><div><h4>Findings <span>{filteredFindings.length}{severityFilter !== 'all' ? ` / ${analysis.findings.length}` : ''}</span></h4><p>Rule-based signals · human review required</p></div><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><label style={{ fontSize: 12, color: 'var(--muted, #777)' }} htmlFor="severity-filter">Severity</label><select id="severity-filter" aria-label="Filter findings by severity" value={severityFilter} onChange={event => setSeverityFilter(event.target.value as typeof severityFilter)} style={{ padding: '7px 9px', borderRadius: 8, border: '1px solid var(--border, #ddd)', background: 'var(--surface, white)', color: 'inherit' }}><option value="all">All</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? 'Show fewer' : 'Show all'} <ChevronDown size={13} /></button></div></div>
+            {analysis.findings.length === 0 ? <div className="empty-state"><CheckCircle2 size={24} /><strong>No rule matches found</strong><p>This does not guarantee the change is safe. Run your test and security pipeline, then request human review.</p></div> : filteredFindings.length === 0 ? <div className="empty-state"><strong>No {severityFilter} findings</strong><p>Try another severity filter to inspect the remaining findings.</p></div> : <div className="finding-list">{displayedFindings.map(finding => <div className="finding-item" key={finding.id}><div className={`finding-icon ${finding.severity}`}><AlertTriangle size={16} /></div><div className="finding-content"><div className="finding-title-row"><strong>{finding.title}</strong><span className={severityClass(finding.severity)}>{finding.severity}</span></div><p>{finding.detail}</p><div className="finding-meta"><span>{finding.category}</span><span>·</span><span>Line {finding.line}</span><span>·</span><span>Heuristic signal</span></div></div></div>)}</div>}
             <div className="human-note"><LockKeyhole size={15} /><p><strong>Human decision required.</strong> This prototype uses local pattern checks, not an LLM or full security scanner. Validate findings and test results before merging.</p></div>
           </section>}
 
